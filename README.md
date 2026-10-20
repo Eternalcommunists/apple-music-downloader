@@ -3,11 +3,14 @@
 [English](./README.md) | [简体中文](./README-CN.md) | [Cloud Server / Proxy Setup](./PROXY-SETUP.md)
 
 > **Original script by Sorrow.** Modified with fixes and improvements.
+>
+> **Fork notice:** this repository is a fork of [zhaarey/apple-music-downloader](https://github.com/zhaarey/apple-music-downloader). See [Fork and differences](#fork-and-differences).
 
 This command-line tool downloads albums, songs, playlists, stations and music videos from Apple Music, preserves or embeds metadata and lyrics, and supports ALAC, AAC and Dolby Atmos. Use it only with content you are entitled to access and in accordance with Apple's terms and applicable law.
 
 ## Contents
 
+- [Fork and differences](#fork-and-differences)
 - [Features](#features)
 - [Supported formats](#supported-formats)
 - [Requirements](#requirements)
@@ -21,6 +24,20 @@ This command-line tool downloads albums, songs, playlists, stations and music vi
 - [Lyrics options](#lyrics-options)
 - [Credits](#credits)
 - [Cloud Server / Proxy Setup](./PROXY-SETUP.md)
+
+## Fork and differences
+
+This project is forked from [zhaarey/apple-music-downloader](https://github.com/zhaarey/apple-music-downloader) (original script by Sorrow). Compared with upstream, this fork adds:
+
+- **Local graphical interface** (`--gui` / double-click on Windows): paste a link, preview metadata, pick a quality, watch progress, open the output folder. Also covers search, artist pages and in-app wrapper-lite sign-in.
+- **Persistent download history** stored locally (up to 300 entries, written atomically, contains no credentials).
+- **Secure GUI server**: loopback-only, fixed port with fallbacks, token-authenticated requests.
+- **GUI sign-in to wrapper-lite** via `general.lite-login-command`; credentials are passed through environment variables (`AMDL_USER` / `AMDL_PASS` / `AMDL_CODE`), never interpolated into a shell string.
+- **Better ALAC handling**: the highest sample-rate / bit-depth variant is selected, with `alac-verify` (report damaged streams) and `lossless-only` (skip tracks without lossless instead of falling back to AAC).
+- **Build and release tooling**: `scripts/build.sh` / `scripts/build.ps1`, plus CI and a `VERSION`-driven release workflow; release binaries self-update from the repository that built them.
+- **Documentation**: bilingual README, a [cloud server / proxy guide](./PROXY-SETUP.md) and a privacy and security section.
+
+Releases are published at [Releases](https://github.com/Eternalcommunists/apple-music-downloader/releases). Credentials, tokens and `config.yaml` are excluded from version control by the whitelist-style `.gitignore`; never commit them.
 
 ## Features
 
@@ -65,7 +82,7 @@ Install and prepare these before running the downloader:
 
 ## Quick Start
 
-Download the precompiled binary for your operating system and architecture from the [latest GitHub Releases](https://github.com/zhaarey/apple-music-downloader/releases/latest):
+Download the precompiled binary for your operating system and architecture from the [latest GitHub Releases](https://github.com/Eternalcommunists/apple-music-downloader/releases/latest):
 
 | Platform | Architecture | Precompiled Binary |
 |---|---|---|
@@ -85,7 +102,7 @@ Download the precompiled binary for your operating system and architecture from 
 
 ```powershell
 # Download precompiled binary (example for 64-bit Windows)
-Invoke-WebRequest -Uri "https://github.com/zhaarey/apple-music-downloader/releases/latest/download/amdl_windows_amd64.exe" -OutFile "amdl.exe"
+Invoke-WebRequest -Uri "https://github.com/Eternalcommunists/apple-music-downloader/releases/latest/download/amdl_windows_amd64.exe" -OutFile "amdl.exe"
 ```
 
 2. Run `amdl.exe` once to automatically generate the default `config.yaml`:
@@ -115,10 +132,10 @@ Example:
 
 ```bash
 # For Apple Silicon (M-series):
-curl -L -o amdl https://github.com/zhaarey/apple-music-downloader/releases/latest/download/amdl_darwin_arm64
+curl -L -o amdl https://github.com/Eternalcommunists/apple-music-downloader/releases/latest/download/amdl_darwin_arm64
 
 # For Intel Macs:
-# curl -L -o amdl https://github.com/zhaarey/apple-music-downloader/releases/latest/download/amdl_darwin_amd64
+# curl -L -o amdl https://github.com/Eternalcommunists/apple-music-downloader/releases/latest/download/amdl_darwin_amd64
 
 # Grant execution permission
 chmod +x amdl
@@ -150,10 +167,10 @@ chmod +x amdl
 
 ```bash
 # For x86_64 / amd64:
-curl -L -o amdl https://github.com/zhaarey/apple-music-downloader/releases/latest/download/amdl_linux_amd64
+curl -L -o amdl https://github.com/Eternalcommunists/apple-music-downloader/releases/latest/download/amdl_linux_amd64
 
 # For ARM64:
-# curl -L -o amdl https://github.com/zhaarey/apple-music-downloader/releases/latest/download/amdl_linux_arm64
+# curl -L -o amdl https://github.com/Eternalcommunists/apple-music-downloader/releases/latest/download/amdl_linux_arm64
 
 # Grant execution permission
 chmod +x amdl
@@ -194,7 +211,7 @@ termux-setup-storage
 3. Download precompiled binary:
 
 ```bash
-curl -L -o amdl https://github.com/zhaarey/apple-music-downloader/releases/latest/download/amdl_android_arm64
+curl -L -o amdl https://github.com/Eternalcommunists/apple-music-downloader/releases/latest/download/amdl_android_arm64
 chmod +x amdl
 ```
 
@@ -249,9 +266,9 @@ It opens a dedicated window (rendered by the Edge WebView2 runtime) and walks th
 5. **On completion** — "Download complete" appears with the success count and file list;
    **Open file location** reveals the files in the OS file manager.
 
-> **Note**: the UI binds to loopback only (a random `127.0.0.1` port) and authenticates with a
-> per-run random token, so other programs or pages cannot drive it. The terminal prints the URL,
-> which also works in a normal browser.
+> **Note**: the UI binds to loopback only (`127.0.0.1`, fixed port 8722 with fallbacks) and authenticates with a
+> persistent random token, so other programs or pages cannot drive it. The terminal prints the URL,
+> which also works in a normal browser. See the [Chinese README](./README-CN.md#隐私与安全) for details.
 > Downloads still require wrapper-lite to be running and logged in (see [Requirements](#requirements)).
 
 ## Configuration
@@ -443,7 +460,7 @@ On Windows PowerShell:
 
 ### Manual Binary Update
 
-Download the latest precompiled executable from [GitHub Releases](https://github.com/zhaarey/apple-music-downloader/releases/latest) and replace your current `amdl` / `amdl.exe` binary.
+Download the latest precompiled executable from [GitHub Releases](https://github.com/Eternalcommunists/apple-music-downloader/releases/latest) and replace your current `amdl` / `amdl.exe` binary.
 
 > For developers building from source, see [For Developers](#for-developers).
 
@@ -462,7 +479,7 @@ If you want to contribute, modify the code, or build the downloader from source:
 **macOS / Linux**:
 
 ```bash
-git clone https://github.com/zhaarey/apple-music-downloader.git
+git clone https://github.com/Eternalcommunists/apple-music-downloader.git
 cd apple-music-downloader
 cp config.yaml.example config.yaml
 go build -o amdl .
@@ -472,7 +489,7 @@ go build -o amdl .
 **Windows (PowerShell)**:
 
 ```powershell
-git clone https://github.com/zhaarey/apple-music-downloader.git
+git clone https://github.com/Eternalcommunists/apple-music-downloader.git
 cd apple-music-downloader
 copy config.yaml.example config.yaml
 go build -o amdl.exe .

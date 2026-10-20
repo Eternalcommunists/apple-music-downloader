@@ -3,11 +3,14 @@
 [English](./README.md) | [简体中文](./README-CN.md) | [云服务器 / 代理配置](./PROXY-SETUP.md)
 
 > **原脚本由 Sorrow 编写。** 本仓库已修改并包含修复与改进。
+>
+> **Fork 说明：** 本仓库 fork 自 [zhaarey/apple-music-downloader](https://github.com/zhaarey/apple-music-downloader)，差异见 [Fork 来源与新增功能](#fork-来源与新增功能)。
 
 这是一个命令行工具，可从 Apple Music 下载专辑、单曲、播放列表、电台和音乐视频，支持 ALAC、AAC 和杜比全景声，并能保留或嵌入元数据与歌词。请仅用于你有权访问的内容，并遵守 Apple 条款和适用法律。
 
 ## 目录
 
+- [Fork 来源与新增功能](#fork-来源与新增功能)
 - [功能特性](#功能特性)
 - [支持的格式](#支持的格式)
 - [前置要求](#前置要求)
@@ -22,6 +25,20 @@
 - [隐私与安全](#隐私与安全)
 - [致谢](#致谢)
 - [云服务器 / 代理配置](./PROXY-SETUP.md)
+
+## Fork 来源与新增功能
+
+本项目 fork 自 [zhaarey/apple-music-downloader](https://github.com/zhaarey/apple-music-downloader)（原脚本由 Sorrow 编写）。相较上游，本版本新增：
+
+- **本地图形界面**（`--gui`，Windows 可双击）：粘贴链接、预览元数据、选择音质、查看进度、打开保存目录；另含搜索、歌手页和 wrapper-lite 应用内登录。
+- **下载历史持久化**：本地保存（最多 300 条，原子写入，不含任何凭据）。
+- **安全的界面服务**：仅监听回环地址，固定端口并带回退，请求需令牌鉴权。
+- **通过 `general.lite-login-command` 在界面中登录 wrapper-lite**：凭据经环境变量（`AMDL_USER` / `AMDL_PASS` / `AMDL_CODE`）传递，绝不拼接进 shell 字符串。
+- **更完善的 ALAC 处理**：自动选择最高采样率 / 位深；`alac-verify`（报告损坏的流）与 `lossless-only`（无无损流时跳过，而不是回退 AAC）。
+- **构建与发布工具**：`scripts/build.sh` / `scripts/build.ps1`、CI 以及由 `VERSION` 驱动的发布流程；发布的二进制会从构建它的仓库自更新。
+- **文档**：中英双语 README、[云服务器 / 代理指南](./PROXY-SETUP.md)和隐私与安全说明。
+
+发布包见 [Releases](https://github.com/Eternalcommunists/apple-music-downloader/releases)。凭据、令牌和 `config.yaml` 已被白名单式 `.gitignore` 排除在版本控制之外，切勿提交。
 
 ## 功能特性
 
@@ -66,7 +83,7 @@
 
 ## 快速开始
 
-从 [最新 GitHub Releases](https://github.com/zhaarey/apple-music-downloader/releases/latest) 下载适合你系统和架构的预编译二进制文件：
+从 [最新 GitHub Releases](https://github.com/Eternalcommunists/apple-music-downloader/releases/latest) 下载适合你系统和架构的预编译二进制文件：
 
 | 系统平台 | 硬件架构 | 预编译二进制文件名 |
 |---|---|---|
@@ -86,7 +103,7 @@
 
 ```powershell
 # 下载预编译二进制（以 64 位 Windows 为例）
-Invoke-WebRequest -Uri "https://github.com/zhaarey/apple-music-downloader/releases/latest/download/amdl_windows_amd64.exe" -OutFile "amdl.exe"
+Invoke-WebRequest -Uri "https://github.com/Eternalcommunists/apple-music-downloader/releases/latest/download/amdl_windows_amd64.exe" -OutFile "amdl.exe"
 ```
 
 2. 首次运行 `amdl.exe`，程序将自动在当前目录下生成默认的 `config.yaml`：
@@ -116,10 +133,10 @@ Invoke-WebRequest -Uri "https://github.com/zhaarey/apple-music-downloader/releas
 
 ```bash
 # Apple Silicon 芯片（M 系列）：
-curl -L -o amdl https://github.com/zhaarey/apple-music-downloader/releases/latest/download/amdl_darwin_arm64
+curl -L -o amdl https://github.com/Eternalcommunists/apple-music-downloader/releases/latest/download/amdl_darwin_arm64
 
 # Intel 芯片：
-# curl -L -o amdl https://github.com/zhaarey/apple-music-downloader/releases/latest/download/amdl_darwin_amd64
+# curl -L -o amdl https://github.com/Eternalcommunists/apple-music-downloader/releases/latest/download/amdl_darwin_amd64
 
 # 赋予执行权限
 chmod +x amdl
@@ -157,10 +174,10 @@ chmod +x amdl
 
 ```bash
 # x86_64 / amd64 架构：
-curl -L -o amdl https://github.com/zhaarey/apple-music-downloader/releases/latest/download/amdl_linux_amd64
+curl -L -o amdl https://github.com/Eternalcommunists/apple-music-downloader/releases/latest/download/amdl_linux_amd64
 
 # ARM64 架构：
-# curl -L -o amdl https://github.com/zhaarey/apple-music-downloader/releases/latest/download/amdl_linux_arm64
+# curl -L -o amdl https://github.com/Eternalcommunists/apple-music-downloader/releases/latest/download/amdl_linux_arm64
 
 # 赋予执行权限
 chmod +x amdl
@@ -207,7 +224,7 @@ termux-setup-storage
 3. 下载预编译二进制：
 
 ```bash
-curl -L -o amdl https://github.com/zhaarey/apple-music-downloader/releases/latest/download/amdl_android_arm64
+curl -L -o amdl https://github.com/Eternalcommunists/apple-music-downloader/releases/latest/download/amdl_android_arm64
 chmod +x amdl
 ```
 
@@ -515,7 +532,7 @@ Windows PowerShell：
 
 ### 手动更新二进制
 
-直接前往 [GitHub Releases](https://github.com/zhaarey/apple-music-downloader/releases/latest) 下载对应平台的最新预编译二进制文件，替换原有的 `amdl` 或 `amdl.exe` 即可。
+直接前往 [GitHub Releases](https://github.com/Eternalcommunists/apple-music-downloader/releases/latest) 下载对应平台的最新预编译二进制文件，替换原有的 `amdl` 或 `amdl.exe` 即可。
 
 > 如果是通过源码构建的用户，请参阅 [开发者指南](#开发者指南)。
 
@@ -534,7 +551,7 @@ Windows PowerShell：
 **macOS / Linux**：
 
 ```bash
-git clone https://github.com/zhaarey/apple-music-downloader.git
+git clone https://github.com/Eternalcommunists/apple-music-downloader.git
 cd apple-music-downloader
 cp config.yaml.example config.yaml
 go build -o amdl .
@@ -544,7 +561,7 @@ go build -o amdl .
 **Windows (PowerShell)**：
 
 ```powershell
-git clone https://github.com/zhaarey/apple-music-downloader.git
+git clone https://github.com/Eternalcommunists/apple-music-downloader.git
 cd apple-music-downloader
 copy config.yaml.example config.yaml
 go build -o amdl.exe .
