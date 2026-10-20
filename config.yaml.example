@@ -3,6 +3,16 @@
 # ------------------------------------------------------------------------------
 general:
   lite-server: "http://127.0.0.1:12340"   # wrapper-lite HTTP API endpoint (/m3u8, /key, /lyrics, etc.)
+  # Command the GUI runs to sign in to wrapper-lite on first use, or again once
+  # the cached token expires. The GUI passes the credentials through the
+  # environment as AMDL_USER / AMDL_PASS / AMDL_CODE, so the template below
+  # never contains user input. Leave empty to disable the sign-in dialog.
+  #
+  # Windows + WSL example (wrapper-lite built inside WSL, as in this repo):
+  #   wsl -d Ubuntu -u root -- bash /root/run.sh login-env
+  # Native Linux example:
+  #   /root/wrapper-lite-native/wrapper-lite-rootless --login-env --base-dir /root/wrapper-lite-native/rootfs/data
+  lite-login-command: ""
   media-user-token: ""                    # Media user token for Station downloads
   # Supported storefront languages: https://gist.github.com/itouakirai/c8ba9df9dc65bd300094103b058731d0
   language: ""                            # Storefront language code (e.g. "en-US", "ja", "zh-Hans-CN")
@@ -21,6 +31,8 @@ media:
   atmos-max: 2768                         # Maximum bitrate limit for Dolby Atmos (2768 | 2448)
   aac-type: "aac-lc"                      # AAC stream profile: "aac-lc", "aac", "aac-binaural", or "aac-downmix"
   alac-fix: true                          # Automatically patch malformed ALAC packets
+  alac-verify: false                      # With alac-fix off, scan the ALAC stream after download and report damage
+  lossless-only: false                    # Skip tracks that have no lossless stream instead of falling back to AAC
 
   # Music Video settings
   mv:

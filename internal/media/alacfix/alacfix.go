@@ -711,7 +711,8 @@ type BadPacket struct {
 	BodyEndBit int
 }
 
-// Result records the outcome of scanning and patching an ALAC file.
+// Result records the outcome of scanning an ALAC file. Patched counts the
+// malformed packets found, whether or not the caller went on to rewrite them.
 type Result struct {
 	TracksCount int
 	Patched     int
@@ -915,32 +916,27 @@ func copyFile(src, dst string) error {
 	return out.Close()
 }
 
-func fixFile(path string, force bool, verbose bool, outPath ...string) (Result, error) {
-	dst := path
-	if len(outPath) > 0 && outPath[0] != "" {
-		dst = outPath[0]
-	}
-
+// scanFile opens path and scans every ALAC track for malformed packets. It only
+// reads, so the caller is free to rewrite the file afterwards. Tracks that use
+// any other codec are skipped, which is how a non-ALAC file reports
+// TracksCount == 0.
+func scanFile(path string, verbose bool) (Result, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return Result{}, err
 	}
+	defer f.Close()
+
 	moov, err := readMoov(f)
 	if err != nil {
-		_ = f.Close()
 		return Result{}, err
 	}
 	tracks, err := findAlacTracks(moov)
 	if err != nil {
-		_ = f.Close()
 		return Result{}, err
-	}
-	if len(tracks) == 0 {
-		return Result{}, f.Close()
 	}
 
 	res := Result{TracksCount: len(tracks)}
-
 	for i := range tracks {
 		td := &tracks[i]
 		if verbose {
@@ -948,15 +944,35 @@ func fixFile(path string, force bool, verbose bool, outPath ...string) (Result, 
 				td.trackID, len(td.locs), td.params.maxSamplesPerFrame, td.params.sampleSize, td.params.channels)
 		}
 		if err := scanTrack(f, td, &res); err != nil {
-			_ = f.Close()
 			return res, err
 		}
 	}
-	// Close before writing so the file can be reopened for writing on Windows.
-	if err := f.Close(); err != nil {
-		return res, err
+	return res, nil
+}
+
+// Scan reports malformed ALAC packets in path without modifying the file.
+// It is the read-only counterpart of Run, used to confirm a downloaded stream
+// really carries ALAC audio and to surface damage it still contains.
+func Scan(path string) (Result, error) {
+	return scanFile(path, false)
+}
+
+func fixFile(path string, force bool, verbose bool, outPath ...string) (Result, error) {
+	dst := path
+	if len(outPath) > 0 && outPath[0] != "" {
+		dst = outPath[0]
 	}
 
+	res, err := scanFile(path, verbose)
+	if err != nil {
+		return res, err
+	}
+	if res.TracksCount == 0 {
+		return res, nil
+	}
+
+	// The scan released its handle, so the file can be reopened for writing on
+	// Windows.
 	if res.Patched > 0 || force {
 		if err := applyPatches(path, dst, res.Report); err != nil {
 			return res, err

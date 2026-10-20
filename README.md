@@ -12,6 +12,7 @@ This command-line tool downloads albums, songs, playlists, stations and music vi
 - [Supported formats](#supported-formats)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
+- [Graphical interface](#graphical-interface)
 - [Configuration](#configuration)
 - [Usage](#usage)
 - [Upgrade](#upgrade)
@@ -19,6 +20,7 @@ This command-line tool downloads albums, songs, playlists, stations and music vi
 - [Get media-user-token](#get-media-user-token)
 - [Lyrics options](#lyrics-options)
 - [Credits](#credits)
+- [Cloud Server / Proxy Setup](./PROXY-SETUP.md)
 
 ## Features
 
@@ -47,10 +49,19 @@ Stations require a valid `media-user-token` from an active subscription.
 
 Install and prepare these before running the downloader:
 
-1. **wrapper-lite**: [github.com/WorldObservationLog/wrapper/tree/lite](https://github.com/WorldObservationLog/wrapper/tree/lite). Required backend decryption service. Start it before using this downloader and set its HTTP endpoint in `lite-server`, for example `http://127.0.0.1:12340`.
-2. **ffmpeg** (Optional): Required only for post-download conversion, animated artwork, or `ffmpeg`-dependent features. See [ffmpeg.org](https://ffmpeg.org/).
+1. **Apple Music account**: ALAC / AAC / Dolby Atmos all require an active subscription, and the account must be able to sign in to Apple Music normally.
+2. **wrapper-lite**: the required backend decryption service. Any download fails while it is not running. See the [wrapper-lite repository](https://github.com/WorldObservationLog/wrapper/tree/lite).
+   - **Get and start it**: the bundled `wrapper-lite-qemu` launcher is recommended (self-contained QEMU, no root and no native chroot needed); Docker works too, as does building from source with CMake and a C++ toolchain.
+   - **First login**: the first run must log in once and cache the token locally (a 2FA code may be required) before the service can be started.
+   - It listens on `http://127.0.0.1:12340` by default; put that address in `general.lite-server` in `config.yaml`.
+   - If it runs on another device or in a container, make it listen on `0.0.0.0` and point `lite-server` at that host's reachable address (do not use `127.0.0.1`).
+   - The regions returned by the service's `/status` must cover the storefront you want to download from.
+3. **ffmpeg** (Optional): Required only for post-download conversion, animated artwork, or `ffmpeg`-dependent features. See [ffmpeg.org](https://ffmpeg.org/).
+4. **Network**: the host must be able to reach `music.apple.com` and `amp-api.music.apple.com`. Restricted networks such as cloud servers are often blocked by Apple; see [Cloud Server / Proxy Setup](./PROXY-SETUP.md).
+5. **Disk space**: lossless audio and music videos are large and downloads stream to disk, so leave enough room. The memory buffer cap is adjustable via `general.max-memory-limit`.
 
 > **Note**: If you are using the precompiled release binaries, **Go is NOT required**. Go (1.23.1+) is only needed if you build from source (see [For Developers](#for-developers)).
+> Android / Termux additionally needs `termux-setup-storage` for storage access; use `termux-wake-lock` before long or background downloads.
 
 ## Quick Start
 
@@ -215,6 +226,34 @@ paths:
 > - These instructions target current Android arm64 Termux environments; 32-bit Android is not a documented target.
 > - If self-update on an older version fails with `lookup api.github.com on [::1]:53 ... connection refused`, re-download the binary once as in step 3; later versions update normally.
 
+## Graphical interface
+
+If you would rather not use the command line, launch the GUI:
+
+```powershell
+.\amdl.exe --gui
+```
+
+It opens a dedicated window (rendered by the Edge WebView2 runtime) and walks through:
+
+1. **Paste a link** — albums, songs, playlists, stations, music videos and artist pages are supported.
+   An album link carrying `?i=` downloads just that song.
+2. **Metadata is fetched automatically** — cover art, title, artist, year, track count, record label,
+   the Apple Digital Master flag, and the full track list with durations and explicit markers.
+3. **Pick a quality** — only qualities the title actually offers are selectable:
+   - Lossless (ALAC), labelled CD-quality or Hi-Res Lossless
+   - High Quality (AAC), 256 kbps
+   - Dolby Atmos, greyed out with a reason when unavailable
+   - The destination folder for the selection is shown underneath
+4. **Confirm** — a progress bar, processed counts and a live log are displayed.
+5. **On completion** — "Download complete" appears with the success count and file list;
+   **Open file location** reveals the files in the OS file manager.
+
+> **Note**: the UI binds to loopback only (a random `127.0.0.1` port) and authenticates with a
+> per-run random token, so other programs or pages cannot drive it. The terminal prints the URL,
+> which also works in a normal browser.
+> Downloads still require wrapper-lite to be running and logged in (see [Requirements](#requirements)).
+
 ## Configuration
 
 When `amdl` is run for the first time without an existing configuration file, it automatically creates `config.yaml` in the current directory from an embedded default template.
@@ -309,6 +348,25 @@ Enter track numbers separated by spaces.
 
 ```bash
 ./amdl --debug "https://music.apple.com/us/album/1989-taylors-version-deluxe/1713845538"
+```
+
+### Lossless edge cases
+
+Without `--aac` / `--atmos` the downloader only considers ALAC streams and picks the **highest sample rate and bit depth that stays within `media.alac-max`** (given both 24-bit/192 kHz and 24-bit/96 kHz renditions, it takes 192 kHz).
+
+Two optional switches change what happens when a track has no ALAC stream:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `media.lossless-only` | `false` | When `true`, a track with no lossless stream is **skipped and counted as Unavailable** instead of silently falling back to AAC. Explicit `--aac` / `--atmos` requests are unaffected. |
+| `media.alac-verify` | `false` | When `true`, the downloaded ALAC stream is scanned on completion: malformed packet counts are reported and a file with no ALAC track is treated as an error. Only runs while `media.alac-fix` is `false` — both walk every packet, so they are never executed twice. |
+
+```yaml
+media:
+  alac-max: 192000        # Sample rate ceiling; values above 192000 are clamped to 192000
+  alac-fix: true          # Patch ALAC packets missing the TYPE_END terminator (also reports damage)
+  alac-verify: false      # When alac-fix is off, scan without modifying
+  lossless-only: false    # Skip tracks without a lossless stream instead of falling back to AAC
 ```
 
 ### Common options

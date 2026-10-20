@@ -37,10 +37,52 @@ type Runner struct {
 	Config config.ConfigSet
 	Flags  Flags
 	State  State
+
+	// Token is the Apple Music bearer token fetched once at startup and reused
+	// by every download, including GUI-initiated ones.
+	Token string
+
+	// Emit receives structured progress events. It is nil for CLI runs, which
+	// print to stdout instead.
+	Emit func(ProgressEvent)
+
+	// OnProgress receives a live counter/file snapshot as each track finishes,
+	// so a front end can advance a progress bar during the run. It is called
+	// only from the download goroutine.
+	OnProgress func(Counter, []AddedTrack)
+
+	// NonInteractive disables the "press Enter to retry" loop so an automated
+	// front end never blocks waiting on stdin.
+	NonInteractive bool
 }
 
 func NewRunner(cfg config.ConfigSet) *Runner {
 	return &Runner{Config: cfg, State: State{OKDict: make(map[string][]int)}}
+}
+
+// emit sends a progress event when a listener is attached.
+func (r *Runner) emit(ev ProgressEvent) {
+	if r.Emit != nil {
+		r.Emit(ev)
+	}
+}
+
+// notifyProgress publishes a live snapshot to OnProgress. It is called from the
+// download goroutine wherever a track finishes, which keeps the GUI bar moving
+// instead of jumping from 0% to 100% at the end.
+func (r *Runner) notifyProgress() {
+	if r.OnProgress == nil {
+		return
+	}
+	r.OnProgress(r.State.Counter, r.State.AddedTracks)
+}
+
+// GetStateInto copies the live counters and downloaded-file list out of the
+// runner. It is called from the download goroutine itself, which is the only
+// writer of State, so no locking is required here.
+func (r *Runner) GetStateInto(counter *Counter, tracks *[]AddedTrack) {
+	*counter = r.State.Counter
+	*tracks = append([]AddedTrack(nil), r.State.AddedTracks...)
 }
 
 type AddedTrack struct {

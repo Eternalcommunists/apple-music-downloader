@@ -18,6 +18,27 @@ import (
 )
 
 func Main() {
+	// The GUI is a different mode entirely, so it is decided before any CLI
+	// flag parsing runs. A released binary is normally started by double-clicking
+	// it, which passes no arguments at all; that now opens the GUI instead of
+	// printing usage. A mistyped flag still prints usage, so a typo can never be
+	// mistaken for a working window.
+	intent := guiIntentFor(os.Args[1:])
+	// An un-flagged launch only opens the GUI when nobody is watching a console:
+	// running `amdl` in a terminal should keep printing the CLI usage.
+	if intent == guiImplicit && !isDoubleClicked() {
+		intent = guiNone
+	}
+	if intent != guiNone {
+		if err := RunGUI(); err != nil {
+			// A double-clicked window has no console, so printing would discard
+			// the message and the program would look like it did nothing.
+			reportUIFailure(userFriendlyGUIError(err, executablePath()))
+			os.Exit(1)
+		}
+		return
+	}
+
 	r := NewRunner(config.ConfigSet{})
 
 	var (
@@ -127,6 +148,7 @@ func Main() {
 			return
 		}
 	}
+	r.Token = token
 
 	args := pflag.Args()
 
@@ -176,9 +198,39 @@ func Main() {
 		}
 		os.Args = append(albumArgs, mvArgs...)
 	}
-	albumTotal := len(os.Args)
+
+	if err := r.runDownloadURLs(os.Args); err != nil {
+		fmt.Println("Download failed:", err)
+		return
+	}
+
+	// Print JSON output
+	if r.Flags.PrintJSON {
+		jsonOutput, err := json.Marshal(r.State.AddedTracks)
+		if err != nil {
+			fmt.Println("Error generating JSON output:", err)
+		} else {
+			fmt.Println(string(jsonOutput))
+		}
+	}
+}
+
+// runDownloadURLs downloads every URL in urls, retrying the whole batch while
+// errors remain. It is the single download driver shared by the CLI and the
+// GUI, so both paths exercise identical engine behaviour.
+func (r *Runner) runDownloadURLs(urls []string) error {
+	token := r.Token
+	if token == "" {
+		var err error
+		token, err = ampapi.GetToken()
+		if err != nil {
+			return fmt.Errorf("failed to get token: %w", err)
+		}
+	}
+
+	albumTotal := len(urls)
 	for {
-		for albumNum, urlRaw := range os.Args {
+		for albumNum, urlRaw := range urls {
 			fmt.Printf("Queue %d of %d: ", albumNum+1, albumTotal)
 			var storefront, albumId string
 
@@ -263,30 +315,23 @@ func Main() {
 				fmt.Println("Invalid type")
 			}
 		}
-		fmt.Printf("=======  [\u2714 ] Completed: %d/%d  |  [\u26A0 ] Warnings: %d  |  [\u2716 ] Errors: %d  =======\n", r.State.Counter.Success, r.State.Counter.Total, r.State.Counter.Unavailable+r.State.Counter.NotSong, r.State.Counter.Error)
+		summary := fmt.Sprintf("=======  [\u2714 ] Completed: %d/%d  |  [\u26A0 ] Warnings: %d  |  [\u2716 ] Errors: %d  =======", r.State.Counter.Success, r.State.Counter.Total, r.State.Counter.Unavailable+r.State.Counter.NotSong, r.State.Counter.Error)
+		// Printed once: a front end that captures stdout (the GUI does) would
+		// otherwise show this line twice, since it also arrives via Emit.
+		fmt.Println(summary)
+
 		if r.State.Counter.Error == 0 {
 			break
-		} else if r.Config.General.ExitOnError {
-			fmt.Println("Error detected, exiting...")
-			os.Exit(1)
-		} else {
-			fmt.Println("Error detected, press Enter to try again...")
-			fmt.Scanln()
-			fmt.Println("Start trying again...")
 		}
-
+		if r.Config.General.ExitOnError || r.NonInteractive {
+			return fmt.Errorf("%d item(s) failed", r.State.Counter.Error)
+		}
+		fmt.Println("Error detected, press Enter to try again...")
+		fmt.Scanln()
+		fmt.Println("Start trying again...")
 		r.State.Counter = Counter{}
 	}
-
-	// Print JSON output
-	if r.Flags.PrintJSON {
-		jsonOutput, err := json.Marshal(r.State.AddedTracks)
-		if err != nil {
-			fmt.Println("Error generating JSON output:", err)
-		} else {
-			fmt.Println(string(jsonOutput))
-		}
-	}
+	return nil
 }
 
 func getProgName(arg0 string) string {
@@ -318,4 +363,3 @@ func progName() string {
 	}
 	return "amdl"
 }
-

@@ -304,6 +304,56 @@ func TestAlacFix_MultiplePackets(t *testing.T) {
 	}
 }
 
+// TestAlacFix_ScanIsReadOnly covers the verify path used by media.alac-verify:
+// Scan must report damage without rewriting the file, so a user who disabled
+// alac-fix still gets the count while their download stays byte-identical.
+func TestAlacFix_ScanIsReadOnly(t *testing.T) {
+	path := buildTestMP4Multi(t, []bool{false, true, false})
+	orig, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Scan(path)
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	if res.TracksCount != 1 {
+		t.Fatalf("expected 1 track, got %d", res.TracksCount)
+	}
+	if res.Patched != 2 {
+		t.Fatalf("expected 2 damaged packets reported, got %d", res.Patched)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(orig, after) {
+		t.Fatal("Scan modified the file")
+	}
+}
+
+// TestAlacFix_ScanNonAlacReportsNoTracks pins the signal verifyLosslessStream
+// relies on to detect a silent lossy fallback: a file with no ALAC track
+// reports TracksCount == 0 rather than an error.
+func TestAlacFix_ScanNonAlacReportsNoTracks(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "dummy.mp4")
+	moov := makeAtom("moov", []byte("dummy payload"))
+	if err := os.WriteFile(path, moov, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Scan(path)
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	if res.TracksCount != 0 {
+		t.Fatalf("expected 0 tracks, got %d", res.TracksCount)
+	}
+}
+
 func TestAlacFix_OutputPathLeavesInputUntouched(t *testing.T) {
 	path := buildTestMP4Multi(t, []bool{false, true, false})
 	orig, err := os.ReadFile(path)

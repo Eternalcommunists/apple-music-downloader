@@ -26,6 +26,10 @@ type lyricsResult struct {
 func (r *Runner) ripTrack(track *model.Track, token string, mediaUserToken string) {
 	var err error
 	r.State.Counter.Total++
+	// Publish right away so the UI shows the track count before the first
+	// (potentially slow) decryption starts.
+	r.notifyProgress()
+	defer r.notifyProgress()
 	fmt.Printf("Track %d of %d: %s\n", track.TaskNum, track.TaskTotal, track.Type)
 
 	//mv dl dev
@@ -52,6 +56,13 @@ func (r *Runner) ripTrack(track *model.Track, token string, mediaUserToken strin
 	if track.WebM3u8 == "" && !needDlAacLc {
 		if r.Flags.Atmos {
 			fmt.Println("Unavailable")
+			r.State.Counter.Unavailable++
+			return
+		}
+		// media.lossless-only forbids the silent AAC fallback below. Skip the
+		// track instead of quietly storing a lossy file in the lossless folder.
+		if r.losslessOnly() {
+			fmt.Println("No lossless stream available; skipping (media.lossless-only is enabled)")
 			r.State.Counter.Unavailable++
 			return
 		}
@@ -280,12 +291,24 @@ func (r *Runner) ripTrack(track *model.Track, token string, mediaUserToken strin
 	}
 	track.SavePath = trackPath
 
-	if r.Config.Media.ALACFix {
-		err = alacfix.Run(track.SavePath, false)
-		if err != nil {
-			fmt.Println("\u26A0 Failed to fix ALAC:", err)
-			r.State.Counter.Unavailable++
-			return
+	// Integrity check and repair both walk every packet, so only one of them
+	// needs to run: when fixing is enabled it reports the same damage, and the
+	// verify pass would only repeat the scan.
+	if !needDlAacLc {
+		// An aac-lc fallback carries no ALAC track, so there is nothing to scan.
+		if r.Config.Media.ALACFix {
+			err = alacfix.Run(track.SavePath, false)
+			if err != nil {
+				fmt.Println("\u26A0 Failed to fix ALAC:", err)
+				r.State.Counter.Unavailable++
+				return
+			}
+		} else if r.Config.Media.ALACVerify {
+			if err = r.verifyLosslessStream(track.SavePath); err != nil {
+				fmt.Println("\u26A0 ALAC verification failed:", err)
+				r.State.Counter.Unavailable++
+				return
+			}
 		}
 	}
 

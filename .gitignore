@@ -18,3 +18,5 @@
 !/internal/**
 !/cmd/
 !/cmd/**
+!/scripts/
+!/scripts/**

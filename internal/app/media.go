@@ -525,6 +525,7 @@ func (r *Runner) extractMedia(b string, more_mode bool) (string, string, error) 
 		return "", "", nil
 	}
 	var Quality string
+	var alacVariants []alacVariantSpec
 	for _, variant := range master.Variants {
 		if r.Flags.Atmos {
 			if variant.Codecs == "ec-3" && strings.Contains(variant.Audio, "atmos") {
@@ -586,34 +587,48 @@ func (r *Runner) extractMedia(b string, more_mode bool) (string, string, error) 
 				}
 			}
 		} else {
+			// ALAC: keep every lossless rendition as a candidate and pick the
+			// best one after the whole playlist has been examined. Selecting inside
+			// the loop would lock onto the first rendition that fits, which may not
+			// be the highest sample rate or bit depth available.
 			if variant.Codecs == "alac" {
-				split := strings.Split(variant.Audio, "-")
-				length := len(split)
-				length_int, err := strconv.Atoi(split[length-2])
-				if err != nil {
-					return "", "", err
-				}
-				max := r.Config.Media.AlacMax
-				if max == 0 {
-					max = 192000
-				}
-				if length_int <= r.Config.Media.AlacMax {
-					if !r.Flags.Debug && !more_mode {
-						fmt.Printf("%s-bit / %s Hz\n", split[length-1], split[length-2])
-					}
-					streamUrlTemp, err := masterUrl.Parse(variant.URI)
-					if err != nil {
-						return "", "", err
-					}
-					streamUrl = streamUrlTemp
-					KHZ := float64(length_int) / 1000.0
-					Quality = fmt.Sprintf("%sB-%.1fkHz", split[length-1], KHZ)
-					break
+				if spec, ok := parseALACVariant(variant.Audio); ok {
+					spec.bandwidth = int(variant.Bandwidth)
+					alacVariants = append(alacVariants, spec)
 				}
 			}
 		}
 	}
+	if !r.Flags.Atmos && !r.Flags.AAC {
+		if best, ok := selectBestALACVariant(alacVariants, r.Config.Media.AlacMax); ok {
+			for _, variant := range master.Variants {
+				spec, parseOK := parseALACVariant(variant.Audio)
+				if !parseOK || spec.sampleRate != best.sampleRate || spec.bitDepth != best.bitDepth {
+					continue
+				}
+				streamUrlTemp, err := masterUrl.Parse(variant.URI)
+				if err != nil {
+					return "", "", err
+				}
+				streamUrl = streamUrlTemp
+				if !r.Flags.Debug && !more_mode {
+					fmt.Printf("ALAC %d-bit / %d Hz\n", best.bitDepth, best.sampleRate)
+				}
+				Quality = formatALACQuality(best)
+				break
+			}
+		}
+	}
 	if streamUrl == nil {
+		if r.losslessOnly() {
+			// Distinguish "renditions exist but all exceed the ceiling" from
+			// "the track ships no lossless rendition at all", so the failure
+			// message points at the setting the user actually has to change.
+			if len(alacVariants) > 0 {
+				return "", "", fmt.Errorf("no lossless stream within media.alac-max=%d Hz", r.Config.Media.AlacMax)
+			}
+			return "", "", errors.New("no lossless stream available (media.lossless-only is enabled)")
+		}
 		return "", "", errors.New("no codec found")
 	}
 	return streamUrl.String(), Quality, nil

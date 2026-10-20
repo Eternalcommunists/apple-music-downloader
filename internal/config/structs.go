@@ -22,16 +22,25 @@ type GeneralConfig struct {
 	LiteServer         string `koanf:"lite-server"`
 	MaxMemoryLimit     int    `koanf:"max-memory-limit"`
 	ExitOnError        bool   `koanf:"exit-on-error"`
+
+	// LiteLoginCommand is the shell command the GUI runs to sign in to
+	// wrapper-lite. Credentials are passed as environment variables
+	// (AMDL_USER / AMDL_PASS / AMDL_CODE) instead of being interpolated into
+	// the string, so the template itself never carries user input. Leaving it
+	// empty disables sign-in from the GUI.
+	LiteLoginCommand string `koanf:"lite-login-command"`
 }
 
 // MediaConfig holds audio quality, m3u8 detection mode, and video settings.
 type MediaConfig struct {
-	GetM3u8Mode string   `koanf:"get-m3u8-mode"`
-	AlacMax     int      `koanf:"alac-max"`
-	AtmosMax    int      `koanf:"atmos-max"`
-	AacType     string   `koanf:"aac-type"`
-	ALACFix     bool     `koanf:"alac-fix"`
-	MV          MVConfig `koanf:"mv"`
+	GetM3u8Mode  string   `koanf:"get-m3u8-mode"`
+	AlacMax      int      `koanf:"alac-max"`
+	AtmosMax     int      `koanf:"atmos-max"`
+	AacType      string   `koanf:"aac-type"`
+	ALACFix      bool     `koanf:"alac-fix"`
+	ALACVerify   bool     `koanf:"alac-verify"`
+	LosslessOnly bool     `koanf:"lossless-only"`
+	MV           MVConfig `koanf:"mv"`
 }
 
 // MVConfig holds music video audio format and quality constraints.

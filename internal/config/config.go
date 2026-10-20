@@ -280,6 +280,11 @@ func (c *Config) Validate() error {
 	if c.Media.AlacMax == 0 {
 		c.Media.AlacMax = 192000
 	}
+	// Apple Music's lossless catalogue tops out at 192 kHz. A larger ceiling
+	// would let every rendition through and could mask a misconfigured value.
+	if c.Media.AlacMax > 192000 {
+		c.Media.AlacMax = 192000
+	}
 	if c.Media.AtmosMax == 0 {
 		c.Media.AtmosMax = 2768
 	}
